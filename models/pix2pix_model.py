@@ -119,6 +119,9 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.real_B = data[1]
         self.fake_B = self.netG(self.real_A)  # G(A)
 
+    def lossG(self):
+
+
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
         # Fake; stop backprop to the generator by detaching fake_B
@@ -136,7 +139,7 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         """Calculate GAN and L1 loss for the generator"""
         # First, G(A) should fake the discriminator
         self.fake_AB = tf.concat([self.real_A, self.fake_B], axis=-1)
-        pred_fake = self.netD(self.fake_AB, training=True)
+        pred_fake = self.netD(self.fake_AB, training=False)
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
         self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * 100.0
