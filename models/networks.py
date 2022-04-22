@@ -1,3 +1,4 @@
+from operator import sub
 import torch
 import torch.nn as nn
 from torch.nn import init
@@ -520,15 +521,24 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             use_bias = norm_layer == tfa.layers.InstanceNormalization
         if input_nc is None:
             input_nc = outer_nc
+        
+        self.submodule = submodule
+
+        self.convs = []
 
         downconv = [
             layers.ZeroPadding2D(padding=(1,1)),
             layers.Conv2D(inner_nc, kernel_size=4,
                              strides=2, use_bias=use_bias)]
+
+        self.convs.append(downconv[-1])
+
         downrelu = layers.LeakyReLU(0.2)
         downnorm = norm_layer()
         uprelu = layers.ReLU()
         upnorm = norm_layer()
+
+        upconv = None
 
         if outermost:
             upconv = [
@@ -539,7 +549,7 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             ]
             down = [*downconv]
             up = [uprelu, *upconv, layers.Activation('tanh')]
-            model = down + [submodule] + up
+            model = down + [self.submodule] + up
         elif innermost:
             upconv = [
                 #layers.ZeroPadding2D(padding=(1,1)),
@@ -561,9 +571,11 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             up = [uprelu, *upconv, upnorm]
 
             if use_dropout:
-                model = down + [submodule] + up + [layers.Dropout(0.5)]
+                model = down + [self.submodule] + up + [layers.Dropout(0.5)]
             else:
-                model = down + [submodule] + up
+                model = down + [self.submodule] + up
+
+        self.convs.append(upconv)
 
         #self.model = tf.keras.models.Sequential(layers = model)
         self.net = model
