@@ -1,11 +1,13 @@
-import torch
-from .base_model import BaseModel
-from . import networks
-
-from tensorflow.keras.losses import MeanAbsoluteError
+from tensorflow.python.keras.losses import MeanAbsoluteError, Huber
+from loss import GANLoss, ContentLoss
 from tensorflow.keras.optimizers import Adam
+from models.base_model import BaseModel
+from models.networks import define_D, define_G, get_scheduler
+from data.mask2image_floodnet_dataset import Mask2ImageFloodnetDataset
+from models.pix2pix_model import Pix2PixModel
 
 import tensorflow as tf
+import os
 
 
 class MetricTest(tf.keras.metrics.Metric):
@@ -79,31 +81,40 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         else:  # during test time, only load G
             self.model_names = ['G']
         # define networks (both generator and discriminator)
-        self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
+        self.netG = define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                       not opt.no_dropout, opt.init_type, opt.init_gain, opt.gpu_ids)
 
         if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
-            self.netD = networks.define_D(opt.input_nc + opt.output_nc, opt.ndf, opt.netD,
+            self.netD = define_D(opt.input_nc + opt.output_nc, opt.ndf, opt.netD,
                                           opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, opt.gpu_ids)
 
         if self.isTrain:
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode, reduction=reduction)
+            self.criterionGAN = GANLoss(opt.gan_mode, reduction=reduction)
             self.criterionL1 = MeanAbsoluteError()
+            self.criterionHuber = Huber()
+            self.ctriterionContent = ContentLoss(perceptual = False)
+            self.criterionPerceptual = ContentLoss(perceptual=True)
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = Adam(learning_rate=opt.lr, beta_1=opt.beta1, beta_2 = 0.999)
             self.optimizer_D = Adam(learning_rate=opt.lr, beta_1=opt.beta1, beta_2 = 0.999)
             #self.optimizers.append(self.optimizer_G)
             #self.optimizers.append(self.optimizer_D)
-            self.schedulers = networks.get_scheduler(opt)
+            self.schedulers = get_scheduler(opt)
         
         self.metric_d_real = MetricTest()
         self.metric_d_fake = MetricTest()
         self.metric_d_total = MetricTest()
         self.metric_g_gan = MetricTest()
+        # setting 1
         self.metric_g_l1 = MetricTest()
+        #setting 2
+        self.metric_g_huber = MetricTest()
+        self.metric_g_content = MetricTest()
+        self.metric_g_perceptual = MetricTest()
         self.metric_g_total = MetricTest()
         self.metric_total = MetricTest()
+
         #self.print_networks()
         self.checkpoint = tf.train.Checkpoint(
             generator_optimizer=self.optimizer_G,
@@ -119,14 +130,14 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.real_B = data[1]
         self.fake_B = self.netG(self.real_A)  # G(A)
 
-    def lossG(self):
-
+    def lossNetwork(self):
+        pass
 
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
         # Fake; stop backprop to the generator by detaching fake_B
         self.fake_AB = tf.concat([self.real_A, self.fake_B], axis=-1)  # we use conditional GANs; we need to feed both input and output to the discriminator
-        pred_fake = self.netD(self.fake_AB, training=True)
+        pred_fake = self.netD(self.fake_AB, training=True)[0]
         self.loss_D_fake = self.criterionGAN(pred_fake, False)
         # Real
         self.real_AB = tf.concat([self.real_A, self.real_B], axis=-1)
@@ -134,17 +145,31 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.loss_D_real = self.criterionGAN(pred_real, True)
         # combine loss and calculate gradients
         self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
+        
 
     def backward_G(self):
         """Calculate GAN and L1 loss for the generator"""
         # First, G(A) should fake the discriminator
         self.fake_AB = tf.concat([self.real_A, self.fake_B], axis=-1)
-        pred_fake = self.netD(self.fake_AB, training=False)
-        self.loss_G_GAN = self.criterionGAN(pred_fake, True)
+        self.real_AB = tf.concat([self.real_A, self.real_B], axis=-1)
+        out = self.netD(self.fake_AB, training=False)
+        out_ = None
+        if self.opt.mode == 'v2':
+            out_ = self.netD(self.real_AB, training=False)
+        pred_fake = out[0]
+        self.loss_G_GAN = self.criterionGAN(pred_fake, True) * self.opt.lambda_
         # Second, G(A) = B
-        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * 100.0
-        # combine loss and calculate gradients
-        self.loss_G = self.loss_G_GAN + self.loss_G_L1
+        if self.opt.type == 'original':
+            self.loss_G_L1 = self.criterionL1(self.real_B, self.fake_B) * self.opt.eta_
+            # combine loss and calculate gradients
+            self.loss_G = self.loss_G_GAN + self.loss_G_L1
+        else:
+            self.loss_G_huber = self.criterionHuber(self.real_B, self.fake_B) * self.opt.eta_
+            self.loss_G_content = self.ctriterionContent(out_[1:], out[1:]) * self.opt.delta_
+            self.loss_G_perceptual = self.criterionPerceptual() * self.opt.gamma_
+            self.loss_G = self.loss_G_GAN + self.loss_G_huber + self.loss_G_content + self.loss_G_perceptual
+
+
     #@tf.function
     def train_step(self, data):                  
         # compute fake images: G(A)
@@ -171,28 +196,88 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.metric_d_fake.update_state(self.loss_D_fake)
         self.metric_d_total.update_state(self.loss_D)
         self.metric_g_gan.update_state(self.loss_G_GAN)
-        self.metric_g_l1.update_state(self.loss_G_L1)
+        if self.opt.mode == 'v1':
+            self.metric_g_l1.update_state(self.loss_G_L1)
+        else:
+            self.metric_g_huber.update_state(self.loss_G_huber)
+            self.metric_g_content.update_state(self.loss_G_content)
+            self.metric_g_perceptual.update_state(self.loss_G_perceptual)
+
         self.metric_g_total.update_state(self.loss_G)
         self.metric_total.update_state(self.loss_D+self.loss_G)
 
-        return {
+        loss_log = {
             'loss_D_fake': self.metric_d_fake.result(),
             'loss_D_real': self.metric_d_real.result(),
             'loss_G_GAN': self.metric_g_gan.result(),
-            'loss_G_L1': self.metric_g_l1.result(),
+        }
+
+        if self.opt.mode == 'v1':
+            loss_log.update({
+                'loss_G_L1': self.metric_g_l1.result()
+            })
+        else:
+            loss_log.update({
+                'loss_G_huber': self.metric_g_huber.result(),
+                'loss_G_content': self.metric_g_content.result(),
+                'loss_G_perceptual': self.metric_g_perceptual.result()
+            })
+        loss_log.update({
             'loss_D_total': self.metric_d_total.result(),
             'loss_G_total': self.metric_g_total.result(),
             'loss_total': self.metric_total.result()
-        }
+        })
+        return loss_log
     
     @property
     def metrics(self):
-        return [
+        out_metrics = [
             self.metric_d_real,
             self.metric_d_fake,
             self.metric_d_total,
-            self.metric_g_gan,
-            self.metric_g_l1,
+            self.metric_g_gan
+            ]
+        if self.opt.mode == 'v1':
+            out_metrics.append(self.metric_g_l1)
+        else:
+            out_metrics += [
+                self.metric_g_huber,
+                self.metric_g_content,
+                self.metric_g_perceptual
+                ]
+        out_metrics += [
             self.metric_g_total,
             self.metric_total
             ]
+        return out_metrics
+
+
+def getPix2PixModel(opt):
+    train_ds, val_ds = Mask2ImageFloodnetDataset.getTfDataset(opt)  # create a dataset given opt.dataset_mode and other options
+    dataset = {
+        'train': train_ds,
+        'val': val_ds
+    }
+    print(opt.dataset_mode)
+    model = Pix2PixModel(opt)              # regular setup: load and print networks; create schedulers
+    model.compile()
+    print(opt.input_nc,opt.output_nc)
+
+    callbacks = [
+        model.schedulers,
+        tf.keras.callbacks.TensorBoard(
+            log_dir=os.path.join(os.path.join(opt.checkpoints_dir, opt.name), 'logs'),
+            histogram_freq=0,
+            write_graph=True,
+            write_images=True,
+            write_steps_per_second=True,
+            update_freq='epoch',
+            profile_batch=0,
+            embeddings_freq=0,
+            embeddings_metadata=None,
+        ) #,
+        #visualCallBack(opt, model)
+    ]
+
+    return model, dataset, callbacks
+
