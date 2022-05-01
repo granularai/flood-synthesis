@@ -15,7 +15,6 @@ import tensorflow as tf
 
 from data.base_dataset import BaseDataset, get_params, get_transform
 
-from data.image_folder import make_dataset
 from PIL import Image
 
 class Mask2ImageFloodnetDataset(BaseDataset):
@@ -36,11 +35,11 @@ class Mask2ImageFloodnetDataset(BaseDataset):
         print("dataset process finished")
         print(len(self.imgs))
         
-        self.input_nc = 25
-        opt.input_nc = 25
+        self.input_nc = 26
+        opt.input_nc = 26
         self.output_nc = 3
         opt.output_nc = 3
-        self.num_classes=23
+        self.num_classes=26
 
         self.height, self.width = 512, 512
     
@@ -85,12 +84,13 @@ class Mask2ImageFloodnetDataset(BaseDataset):
             if flip_tb:
                 image_x = tf.image.flip_up_down(image_x)
                 image_y = tf.image.flip_up_down(image_y)
-        return tf.one_hot(
-            tf.cast(image_x, dtype=tf.int32), 
-            depth=self.num_classes,
-            axis = -1, 
-            dtype=tf.float32
-        )[:,:,0,:], image_y
+        return image_x, image_y
+        #return tf.one_hot(
+        #    tf.cast(image_x, dtype=tf.int32), 
+        #    depth=self.num_classes,
+        #    axis = -1, 
+        #    dtype=tf.float32
+        #)[:,:,0,:], image_y
     @tf.function
     def preprocessMask(self, x, y):
         #tf.print(x.shape)

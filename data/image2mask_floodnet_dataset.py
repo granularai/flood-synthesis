@@ -10,18 +10,18 @@ import torchvision.transforms as transforms
 from torchvision.transforms.transforms import Resize
 from tensorflow.keras import layers
 from functools import partial
+from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
 
 from data.base_dataset import BaseDataset, get_params, get_transform
 
-from data.image_folder import make_dataset
 from PIL import Image
 
 class Image2MaskFloodnetDataset(BaseDataset):
     def __init__(self, opt):
         super(Image2MaskFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/HADR/data/train'
+        data_path = '/mnt/now/houston/train'
 
         self.imgs = []
 
@@ -87,12 +87,13 @@ class Image2MaskFloodnetDataset(BaseDataset):
             if flip_tb:
                 image_x = tf.image.flip_up_down(image_x)
                 image_y = tf.image.flip_up_down(image_y)
-        return image_x, tf.one_hot(
-            tf.cast(image_y, dtype=tf.int32), 
-            depth=self.num_classes,
-            axis = -1, 
-            dtype=tf.float32
-        )[:,:,0,:]
+        return image_x, image_y
+        #return image_x, tf.one_hot(
+        #    tf.cast(image_y, dtype=tf.int32), 
+        #    depth=self.num_classes,
+        #    axis = -1, 
+        #    dtype=tf.float32
+        #)[:,:,0,:]
     @tf.function
     def preprocessMask(self, x, y):
         #tf.print(x.shape)
