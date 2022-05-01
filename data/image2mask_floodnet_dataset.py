@@ -13,10 +13,12 @@ from data.base_dataset import BaseDataset, get_params, get_transform
 from PIL import Image
 
 class Image2MaskFloodnetDataset(BaseDataset):
-    def __init__(self, opt):
+    def __init__(self, opt, train = True):
         #super(Image2MaskFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/houston/processed/train'
-
+        if train == True:
+            data_path = '/mnt/now/houston/processed/train'
+        else:
+            data_path = '/mnt/now/houston/processed/test'
         self.imgs = []
 
         x_dir = data_path+'/x/*'
@@ -102,7 +104,7 @@ class Image2MaskFloodnetDataset(BaseDataset):
         total_sz = self.__len__()
         shuffled_inds = np.random.permutation(total_sz)
         train_ind, val_ind = train_test_split(shuffled_inds, test_size=0.3)
-        return train_ind, val_ind
+        return #train_ind, val_ind
     
     @classmethod
     def getDataLen(cls, opt):
@@ -111,32 +113,33 @@ class Image2MaskFloodnetDataset(BaseDataset):
 
     @classmethod
     def getTfDataset(cls, opt):
-        ds = cls(opt)
+        ds_train = cls(opt, train = True)
+        ds_val = cls(opt, train = False)
         
-        print(f"total datasetlenght {ds.__len__()}")
+        print(f"total datasetlenght {ds_train.__len__()}")
 
-        train_ind, val_ind = ds.partition()
+        #train_ind, val_ind = ds.partition()
         
         resize_x = tf.keras.layers.Resizing(
-            ds.height,
-            ds.width,
+            ds_train.height,
+            ds_train.width,
             interpolation='bilinear',
             crop_to_aspect_ratio=False,
         )
         resize_y = tf.keras.layers.Resizing(
-            ds.height,
-            ds.width,
+            ds_train.height,
+            ds_train.width,
             interpolation='nearest',
             crop_to_aspect_ratio=False,
         )
 
         #training pipeline
-        train_ds = tf.data.Dataset.from_tensor_slices(
-            tf.constant(train_ind, dtype=tf.int32)
+        train_ds = tf.data.Dataset.range(
+            len(ds_train)
         ).shuffle(
-            len(train_ind)*4
+            len(ds_train)*4
         ).interleave(
-            lambda i: ds.__getGen__(i),
+            lambda i: ds_train.__getGen__(i),
             num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y: (resize_x(x), resize_y(y)),
@@ -152,7 +155,7 @@ class Image2MaskFloodnetDataset(BaseDataset):
             num_parallel_calls=tf.data.AUTOTUNE
         ).cache(
         ).map(
-            ds.getAugs,
+            ds_train.getAugs,
             num_parallel_calls=tf.data.AUTOTUNE
         ).batch(
             opt.batch_size,
@@ -162,12 +165,12 @@ class Image2MaskFloodnetDataset(BaseDataset):
         )
 
         # validation pipeline
-        val_ds = tf.data.Dataset.from_tensor_slices(
-            tf.constant(val_ind, dtype=tf.int32)
+        val_ds = tf.data.Dataset.range(
+            len(ds_val)
         ).shuffle(
-            len(val_ind)*4
+            len(ds_val)*4
         ).interleave(
-            lambda i: ds.__getGen__(i),
+            lambda i: ds_val.__getGen__(i),
             num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y: (resize_x(x), resize_y(y)),
