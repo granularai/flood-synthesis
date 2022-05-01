@@ -1,6 +1,6 @@
-from tensorflow.python.keras import layers
-from tensorflow.python.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau 
-from tensorflow.ker̦as.optimizers.schedules import ExponentialDecay, CosineDecay
+from tensorflow.keras import layers
+from tensorflow.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau 
+from tensorflow.keras.optimizers.schedules import ExponentialDecay, CosineDecay
 
 import functools
 import tensorflow as tf

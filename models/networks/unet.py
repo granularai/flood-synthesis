@@ -1,7 +1,9 @@
-from tensorflow.python.keras import layers
+from tensorflow.keras import layers
 
 import tensorflow as tf
 import tensorflow_addons as tfa
+
+import functools
 
 def UnetGenerator(input_nc, output_nc, num_downs, ngf=64, norm_layer=layers.BatchNormalization, use_dropout=False):
         """Construct a Unet generator
@@ -17,13 +19,13 @@ def UnetGenerator(input_nc, output_nc, num_downs, ngf=64, norm_layer=layers.Batc
         It is a recursive process.
         """
         # construct unet structure
-        convs = []
+        #convs = []
         input_ = layers.Input(shape=(None, None, input_nc))
         unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
-        convs += unet_block.convs
+        #convs += unet_block.convs
         for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
             unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
-            convs += unet_block.convs
+        #    convs += unet_block.convs
         # gradually reduce the number of filters from ngf * 8 to ngf
         unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
@@ -51,7 +53,8 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             norm_layer          -- normalization layer
             use_dropout (bool)  -- if use dropout layers.
         """
-        super(UnetSkipConnectionBlock, self).__init__()
+        super(UnetSkipConnectionBlock, self).__init__(outer_nc, inner_nc, input_nc=None,
+                 submodule=None, outermost=False, innermost=False, norm_layer=layers.BatchNormalization, use_dropout=False)
         self.outermost = outermost
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == tfa.layers.InstanceNormalization
@@ -79,8 +82,8 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
                                         )
             ]
             down = [*downconv]
-            up = [uprelu, *upconv, layers.Activation('tanh')]
-            model = down + [self.submodule] + up
+            up = [uprelu, *upconv, layers.Activation('sigmoid')]
+            model = down + [submodule] + up
         elif innermost:
             upconv = [
                 #layers.ZeroPadding2D(padding=(1,1)),
@@ -102,9 +105,9 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             up = [uprelu, *upconv, upnorm]
 
             if use_dropout:
-                model = down + [self.submodule] + up + [layers.Dropout(0.5)]
+                model = down + [submodule] + up + [layers.Dropout(0.5)]
             else:
-                model = down + [self.submodule] + up
+                model = down + [submodule] + up
 
         #self.model = tf.keras.models.Sequential(layers = model)
         self.net = model

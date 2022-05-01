@@ -1,13 +1,7 @@
-import os
 import glob
 import numpy as np
-import random
-import cv2
-import torch
 import pandas as pd
 import tqdm
-import torchvision.transforms as transforms
-from torchvision.transforms.transforms import Resize
 from tensorflow.keras import layers
 from functools import partial
 from sklearn.model_selection import train_test_split
@@ -20,8 +14,8 @@ from PIL import Image
 
 class Image2MaskFloodnetDataset(BaseDataset):
     def __init__(self, opt):
-        super(Image2MaskFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/houston/train'
+        #super(Image2MaskFloodnetDataset, self).__init__(opt)
+        data_path = '/mnt/now/houston/splits/train'
 
         self.imgs = []
 
@@ -33,17 +27,17 @@ class Image2MaskFloodnetDataset(BaseDataset):
         print(data_path)
         for img in tqdm.tqdm(imgs):
             name = img.split('/')[-1].split('.')[0]
-            self.imgs.append((img,y_dir+name+'.bmp'))
+            self.imgs.append((img,y_dir+name+'.npy'))
         
         print("dataset process finished")
         print(len(self.imgs))
         
-        self.input_nc = 25
-        opt.input_nc = 25
-        self.output_nc = 3
-        opt.output_nc = 3
-        self.num_classes=23
-
+        self.input_nc = 3
+        opt.input_nc = 3
+        self.output_nc = 26
+        opt.output_nc = 26
+        self.num_classes=26
+        
         self.height, self.width = 512, 512
     
     def __len__(self):
@@ -64,18 +58,18 @@ class Image2MaskFloodnetDataset(BaseDataset):
 
     def __getitem__(self, idx):
         x,y = self.imgs[idx]
-        img_x = Image.open(x).convert('RGB')
-        img_y = Image.open(y)
+        img_x = np.load(x) #Image.open(x).convert('RGB')
+        img_y = np.load(y)
 
-        img_x = img_x.resize((self.width,self.height), resample = Image.BILINEAR)
-        img_y = img_y.resize((self.height,self.width), resample = Image.NEAREST)
+        #img_x = img_x.resize((self.width,self.height), resample = Image.BILINEAR)
+        #img_y = img_y.resize((self.height,self.width), resample = Image.NEAREST)
         # split AB image into A and B
-        img_x = tf.keras.utils.img_to_array(img_x)
-        img_y = tf.keras.utils.img_to_array(img_y)
+        #img_x = tf.keras.utils.img_to_array(img_x)
+        #img_y = tf.keras.utils.img_to_array(img_y)
         #print(img_x.shape)
         #print(img_y.shape)
-
         return img_x, img_y
+    
     @tf.function
     def getAugs(self, image_x, image_y):
         if tf.random.uniform(()) > 0.5:
@@ -91,6 +85,7 @@ class Image2MaskFloodnetDataset(BaseDataset):
         #return image_x, tf.one_hot(
         #    tf.cast(image_y, dtype=tf.int32), 
         #    depth=self.num_classes,
+        
         #    axis = -1, 
         #    dtype=tf.float32
         #)[:,:,0,:]
@@ -117,8 +112,23 @@ class Image2MaskFloodnetDataset(BaseDataset):
     @classmethod
     def getTfDataset(cls, opt):
         ds = cls(opt)
+        
+        print(f"total datasetlenght {ds.__len__()}")
 
         train_ind, val_ind = ds.partition()
+        
+        resize_x = tf.keras.layers.Resizing(
+            ds.height,
+            ds.width,
+            interpolation='bilinear',
+            crop_to_aspect_ratio=False,
+        )
+        resize_y = tf.keras.layers.Resizing(
+            ds.height,
+            ds.width,
+            interpolation='nearest',
+            crop_to_aspect_ratio=False,
+        )
 
         #training pipeline
         train_ds = tf.data.Dataset.from_tensor_slices(
@@ -128,18 +138,21 @@ class Image2MaskFloodnetDataset(BaseDataset):
         ).interleave(
             lambda i: ds.__getGen__(i),
             num_parallel_calls=tf.data.AUTOTUNE
-        ).cache(
+        ).map(
+            lambda x,y: (resize_x(x), resize_y(y)),
+            num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y : (x/255.0, y), #normalizing(y)),
             num_parallel_calls=tf.data.AUTOTUNE
         ).map(
-            ds.getAugs,
-            num_parallel_calls=tf.data.AUTOTUNE
-        ).map(
             lambda x,y : (
                 x,
-                ds.preprocessMask(x,y)
+                y #ds.preprocessMask(x,y)
             ),
+            num_parallel_calls=tf.data.AUTOTUNE
+        ).cache(
+        ).map(
+            ds.getAugs,
             num_parallel_calls=tf.data.AUTOTUNE
         ).batch(
             opt.batch_size,
@@ -156,16 +169,19 @@ class Image2MaskFloodnetDataset(BaseDataset):
         ).interleave(
             lambda i: ds.__getGen__(i),
             num_parallel_calls=tf.data.AUTOTUNE
-        ).cache(
+        ).map(
+            lambda x,y: (resize_x(x), resize_y(y)),
+            num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y : (x/255.0, y), #normalizing(y)),
             num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y : (
                 x,
-                ds.preprocessMask(x,y)
+                y #ds.preprocessMask(x,y)
             ),
             num_parallel_calls=tf.data.AUTOTUNE
+        ).cache(
         ).batch(
             opt.batch_size,
             drop_remainder=False

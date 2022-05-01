@@ -1,4 +1,4 @@
-from tensorflow.python.keras import layers
+from tensorflow.keras import layers
 
 import functools
 import tensorflow as tf

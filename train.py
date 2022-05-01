@@ -83,8 +83,10 @@ class visualCallBack(tf.keras.callbacks.Callback):
 
 
 if __name__ == '__main__':
+    print("parsing args")
     opt = TrainOptions().parse()   # get training options
     
+    print('----------------------mode------------------------')    
     if not opt.mode == 'seg':
         model, dataset, callbacks = getPix2PixModel(opt)
     else:

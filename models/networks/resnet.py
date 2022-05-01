@@ -8,10 +8,10 @@ from torch.optim import lr_scheduler
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow import keras
-from tensorflow.python.keras import layers
-from tensorflow.python.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau 
-from tensorflow.ker̦as.optimizers.schedules import ExponentialDecay, CosineDecay
-from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
+from tensorflow.keras import layers
+from tensorflow.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau 
+from tensorflow.keras.optimizers.schedules import ExponentialDecay, CosineDecay
+from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
 
 
 

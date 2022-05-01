@@ -1,10 +1,9 @@
-from tensorflow.python.keras.losses import MeanAbsoluteError, Huber
+from tensorflow.keras.losses import MeanAbsoluteError, Huber
 from loss import GANLoss, ContentLoss
 from tensorflow.keras.optimizers import Adam
 from models.base_model import BaseModel
 from models.networks import define_D, define_G, get_scheduler
 from data.mask2image_floodnet_dataset import Mask2ImageFloodnetDataset
-from models.pix2pix_model import Pix2PixModel
 
 import tensorflow as tf
 import os

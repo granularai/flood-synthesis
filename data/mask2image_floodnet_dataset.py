@@ -20,7 +20,7 @@ from PIL import Image
 class Mask2ImageFloodnetDataset(BaseDataset):
     def __init__(self, opt):
         super(Mask2ImageFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/HADR/data/train'
+        data_path = '/mnt/now/houston/processed/train'
 
         self.imgs = []
 
@@ -31,7 +31,7 @@ class Mask2ImageFloodnetDataset(BaseDataset):
         print(data_path)
         for img in tqdm.tqdm(imgs):
             name = img.split('/')[-1].split('.')[0]
-            self.imgs.append((img,y_dir+name+'.bmp'))
+            self.imgs.append((img,y_dir+name+'.npy'))
         print("dataset process finished")
         print(len(self.imgs))
         
@@ -53,7 +53,7 @@ class Mask2ImageFloodnetDataset(BaseDataset):
         return tf.data.Dataset.from_generator(
             self.__getG__, 
             output_signature=(
-                tf.TensorSpec(shape=(None, None, 1), dtype=tf.float32),
+                tf.TensorSpec(shape=(None, None, 26), dtype=tf.float32),
                 tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32)
                 ),
             args=(idx,)
@@ -61,18 +61,18 @@ class Mask2ImageFloodnetDataset(BaseDataset):
 
     def __getitem__(self, idx):
         x,y = self.imgs[idx]
-        img_x = Image.open(x).convert('RGB')
-        img_y = Image.open(y)
+        img_x = np.load(x) #Image.open(x).convert('RGB')
+        img_y = np.load(y) #Image.open(y)
 
-        img_x = img_x.resize((self.width,self.height), resample = Image.BILINEAR)
-        img_y = img_y.resize((self.height,self.width), resample = Image.NEAREST)
-        # split AB image into A and B
-        img_x = tf.keras.utils.img_to_array(img_x)
-        img_y = tf.keras.utils.img_to_array(img_y)
+        #img_x = img_x.resize((self.width,self.height), resample = Image.BILINEAR)
+        #img_y = img_y.resize((self.height,self.width), resample = Image.NEAREST)
+        ## split AB image into A and B
+        #img_x = tf.keras.utils.img_to_array(img_x)
+        #img_y = tf.keras.utils.img_to_array(img_y)
         #print(img_x.shape)
         #print(img_y.shape)
-
         return img_y, img_x
+    
     @tf.function
     def getAugs(self, image_x, image_y):
         if tf.random.uniform(()) > 0.5:
@@ -134,7 +134,7 @@ class Mask2ImageFloodnetDataset(BaseDataset):
             num_parallel_calls=tf.data.AUTOTUNE
         ).map(
             lambda x,y : (
-                ds.preprocessMask(x,y),
+                x, #ds.preprocessMask(x,y),
                 y
             ),
             num_parallel_calls=tf.data.AUTOTUNE

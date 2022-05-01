@@ -8,6 +8,13 @@ import tensorflow_addons as tfa
 import os
 
 def getSegModel(opt):
+    train_ds, val_ds = Image2MaskFloodnetDataset.getTfDataset(opt)  # crea\]e a dataset given opt.dataset_mode and other options
+    dataset = {
+        'train': train_ds,
+        'val': val_ds
+    }
+    print(opt.dataset_mode)
+    
     model = define_G(
         opt.input_nc, 
         opt.output_nc, 
@@ -19,14 +26,8 @@ def getSegModel(opt):
         opt.init_gain, 
         opt.gpu_ids
         )
-    
-    train_ds, val_ds = Image2MaskFloodnetDataset.getTfDataset(opt)  # crea\]e a dataset given opt.dataset_mode and other options
-    dataset = {
-        'train': train_ds,
-        'val': val_ds
-    }
-    print(opt.dataset_mode)
-    
+    print (model.summary())
+    fg
     scheduler = get_scheduler(opt)
 
     optimizer = Adam(learning_rate=opt.lr)
@@ -40,7 +41,7 @@ def getSegModel(opt):
         name='binary_focal_crossentropy'
     )
 
-    hamming_loss = tfa.metrics.HammingLoss()
+    hamming_loss = tfa.metrics.HammingLoss(mode='multilabel')
 
     model.compile(optimizer=optimizer, loss=binary_focal_cross_entropy_loss, metrics=[hamming_loss])
 
