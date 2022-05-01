@@ -27,8 +27,7 @@ def getSegModel(opt):
         opt.gpu_ids
         )
     print (model.summary())
-    fg
-    scheduler = get_scheduler(opt)
+    scheduler = get_scheduler(opt, platue_metric='val_hamming_loss')
 
     optimizer = Adam(learning_rate=opt.lr)
 
@@ -62,6 +61,7 @@ def getSegModel(opt):
             save_weights_only=True,
             monitor='val_hamming_loss',
             mode='min',
+            verbose=1,
             save_best_only=True
         )
     ]

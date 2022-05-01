@@ -31,7 +31,7 @@ def UnetGenerator(input_nc, output_nc, num_downs, ngf=64, norm_layer=layers.Batc
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
-        return tf.keras.Sequential([input_, unet_block])
+        return tf.keras.models.Model(inputs = input_, outputs = unet_block(input_))
 
 class UnetSkipConnectionBlock(tf.keras.layers.Layer):
     """Defines the Unet submodule with skip connection.
@@ -53,9 +53,15 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             norm_layer          -- normalization layer
             use_dropout (bool)  -- if use dropout layers.
         """
-        super(UnetSkipConnectionBlock, self).__init__(outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False, norm_layer=layers.BatchNormalization, use_dropout=False)
+        super(UnetSkipConnectionBlock, self).__init__()
+        self.outer_nc = outer_nc
+        self.input_nc = input_nc
+        self.submodule = submodule
+        self.inntermost = innermost,
+        self.norm_layer = norm_layer
+        self.use_dropout = use_dropout
         self.outermost = outermost
+        
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == tfa.layers.InstanceNormalization
         else:
@@ -120,3 +126,7 @@ class UnetSkipConnectionBlock(tf.keras.layers.Layer):
             return x_
         else:   # add skip connections
             return tf.concat([x, x_], axis=-1)
+    
+    def get_config(self):
+        config = super().get_config()
+        return config

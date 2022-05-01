@@ -44,7 +44,7 @@ class Identity(layers.Layer):
         return x
 
 
-def get_scheduler(opt):
+def get_scheduler(opt, platue_metric = ''):
     """Return a learning rate scheduler
 
     Parameters:
@@ -57,7 +57,7 @@ def get_scheduler(opt):
     For other schedulers (step, plateau, and cosine), we use the default PyTorch schedulers.
     See https://pytorch.org/docs/stable/optim.html for more details.
     """
-    
+    scheduler = None
     if opt.lr_policy == 'linear':
         def lambda_rule(epoch, lr):
             lr_l = 1.0 - max(0, epoch + opt.epoch_count - opt.n_epochs) / float(opt.n_epochs_decay + 1)
@@ -72,7 +72,7 @@ def get_scheduler(opt):
         scheduler = LearningRateScheduler(func())
     elif opt.lr_policy == 'plateau':
         # TODO: replace val loss with appropriate metric
-        scheduler = ReduceLROnPlateau(monitor='loss_total', mode='min', factor=0.2, min_delta=0.01, patience=5)
+        scheduler = ReduceLROnPlateau(monitor=platue_metric, mode='min', factor=0.02, min_delta=0.00001, patience=10)
     elif opt.lr_policy == 'cosine':
         def func():
             schedule = CosineDecay(opt.lr, decay_steps=opt.n_epochs, alpha=0)
@@ -81,7 +81,7 @@ def get_scheduler(opt):
             return lambda_rule
         scheduler = LearningRateScheduler(func())
     else:
-        return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
+        raise NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
     return scheduler
 
 

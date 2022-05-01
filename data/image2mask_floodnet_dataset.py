@@ -15,7 +15,7 @@ from PIL import Image
 class Image2MaskFloodnetDataset(BaseDataset):
     def __init__(self, opt):
         #super(Image2MaskFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/houston/splits/train'
+        data_path = '/mnt/now/houston/processed/train'
 
         self.imgs = []
 
@@ -37,7 +37,7 @@ class Image2MaskFloodnetDataset(BaseDataset):
         self.output_nc = 26
         opt.output_nc = 26
         self.num_classes=26
-        
+
         self.height, self.width = 512, 512
     
     def __len__(self):
