@@ -31,7 +31,7 @@ def UnetGenerator(input_nc, output_nc, num_downs, ngf=64, norm_layer=layers.Batc
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
-        return tf.keras.models.Model(inputs = input_, outputs = unet_block(input_))
+        return tf.keras.Sequential([input_, unet_block ])
 
 class UnetSkipConnectionBlock(tf.keras.layers.Layer):
     """Defines the Unet submodule with skip connection.

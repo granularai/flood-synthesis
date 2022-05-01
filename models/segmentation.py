@@ -46,6 +46,10 @@ def getSegModel(opt):
 
     print(opt.input_nc,opt.output_nc)
 
+    ckpt = os.path.join(os.path.join(opt.checkpoints_dir, opt.name), 'ckpt')
+    
+    if not os.path.exists(ckpt):
+        os.makedirs(ckpt)
     callbacks = [
         scheduler,
         tf.keras.callbacks.TensorBoard(
@@ -57,9 +61,9 @@ def getSegModel(opt):
             update_freq='epoch'
         ),
         tf.keras.callbacks.ModelCheckpoint(
-            filepath=os.path.join(os.path.join(opt.checkpoints_dir, opt.name), 'ckpt'),
+            filepath=ckpt,
             save_weights_only=True,
-            monitor='val_hamming_loss',
+            monitor='val_loss',
             mode='min',
             verbose=1,
             save_best_only=True

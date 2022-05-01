@@ -72,7 +72,7 @@ def get_scheduler(opt, platue_metric = ''):
         scheduler = LearningRateScheduler(func())
     elif opt.lr_policy == 'plateau':
         # TODO: replace val loss with appropriate metric
-        scheduler = ReduceLROnPlateau(monitor=platue_metric, mode='min', factor=0.02, min_delta=0.00001, patience=10)
+        scheduler = ReduceLROnPlateau(monitor=platue_metric, mode='min', factor=0.2, min_delta=0.00001, patience=10)
     elif opt.lr_policy == 'cosine':
         def func():
             schedule = CosineDecay(opt.lr, decay_steps=opt.n_epochs, alpha=0)
