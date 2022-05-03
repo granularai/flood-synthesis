@@ -4,6 +4,7 @@ from tensorflow.keras.optimizers import Adam
 from models.base_model import BaseModel
 from models.networks import define_D, define_G, get_scheduler
 from data.mask2image_floodnet_dataset import Mask2ImageFloodnetDataset
+from models.segmentation import getSegModel
 
 import tensorflow as tf
 import os
@@ -100,6 +101,11 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
             #self.optimizers.append(self.optimizer_G)
             #self.optimizers.append(self.optimizer_D)
             self.schedulers = get_scheduler(opt)
+            if opt.mode == 'v2':
+                ckpt = os.path.join(os.path.join(opt.checkpoints_dir, opt.seg_name), 'ckpt')
+                self.loss_network, _, _ = getSegModel(opt)
+                self.loss_network.load_weights(ckpt)
+                tf.print("perceptual weights loaded")
         
         self.metric_d_real = MetricTest()
         self.metric_d_fake = MetricTest()
@@ -140,7 +146,7 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.loss_D_fake = self.criterionGAN(pred_fake, False)
         # Real
         self.real_AB = tf.concat([self.real_A, self.real_B], axis=-1)
-        pred_real = self.netD(self.real_AB, training=True)
+        pred_real = self.netD(self.real_AB, training=True)[0]
         self.loss_D_real = self.criterionGAN(pred_real, True)
         # combine loss and calculate gradients
         self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
@@ -151,18 +157,19 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         # First, G(A) should fake the discriminator
         self.fake_AB = tf.concat([self.real_A, self.fake_B], axis=-1)
         self.real_AB = tf.concat([self.real_A, self.real_B], axis=-1)
-        out = self.netD(self.fake_AB, training=False)
+        out = self.netD(self.fake_AB, training=True)
         out_ = None
         if self.opt.mode == 'v2':
-            out_ = self.netD(self.real_AB, training=False)
+            out_ = self.netD(self.real_AB, training=True)
         pred_fake = out[0]
         self.loss_G_GAN = self.criterionGAN(pred_fake, True) * self.opt.lambda_
         # Second, G(A) = B
-        if self.opt.type == 'original':
+        if self.opt.mode == 'v1':
             self.loss_G_L1 = self.criterionL1(self.real_B, self.fake_B) * self.opt.eta_
             # combine loss and calculate gradients
             self.loss_G = self.loss_G_GAN + self.loss_G_L1
         else:
+            self.loss_G_L1 = self.criterionL1(self.real_B, self.fake_B) * self.opt.eta_
             self.loss_G_huber = self.criterionHuber(self.real_B, self.fake_B) * self.opt.eta_
             self.loss_G_content = self.ctriterionContent(out_[1:], out[1:]) * self.opt.delta_
             self.loss_G_perceptual = self.criterionPerceptual() * self.opt.gamma_
@@ -195,9 +202,8 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
         self.metric_d_fake.update_state(self.loss_D_fake)
         self.metric_d_total.update_state(self.loss_D)
         self.metric_g_gan.update_state(self.loss_G_GAN)
-        if self.opt.mode == 'v1':
-            self.metric_g_l1.update_state(self.loss_G_L1)
-        else:
+        self.metric_g_l1.update_state(self.loss_G_L1)
+        if self.opt.mode == 'v2':
             self.metric_g_huber.update_state(self.loss_G_huber)
             self.metric_g_content.update_state(self.loss_G_content)
             self.metric_g_perceptual.update_state(self.loss_G_perceptual)
@@ -209,13 +215,10 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
             'loss_D_fake': self.metric_d_fake.result(),
             'loss_D_real': self.metric_d_real.result(),
             'loss_G_GAN': self.metric_g_gan.result(),
+            'loss_G_L1': self.metric_g_l1.result()
         }
 
-        if self.opt.mode == 'v1':
-            loss_log.update({
-                'loss_G_L1': self.metric_g_l1.result()
-            })
-        else:
+        if self.opt.mode == 'v2':
             loss_log.update({
                 'loss_G_huber': self.metric_g_huber.result(),
                 'loss_G_content': self.metric_g_content.result(),
@@ -234,11 +237,10 @@ class Pix2PixModel(BaseModel, tf.keras.models.Model):
             self.metric_d_real,
             self.metric_d_fake,
             self.metric_d_total,
-            self.metric_g_gan
+            self.metric_g_gan,
+            self.metric_g_l1
             ]
-        if self.opt.mode == 'v1':
-            out_metrics.append(self.metric_g_l1)
-        else:
+        if self.opt.mode == 'v2':
             out_metrics += [
                 self.metric_g_huber,
                 self.metric_g_content,
@@ -262,8 +264,10 @@ def getPix2PixModel(opt):
     model.compile()
     print(opt.input_nc,opt.output_nc)
 
+    monitor = 'loss_G_L1' if opt.mode == 'v1' else 'mae'
+
     callbacks = [
-        model.schedulers,
+        #model.schedulers,
         tf.keras.callbacks.TensorBoard(
             log_dir=os.path.join(os.path.join(opt.checkpoints_dir, opt.name), 'logs'),
             histogram_freq=0,
@@ -274,7 +278,15 @@ def getPix2PixModel(opt):
             profile_batch=0,
             embeddings_freq=0,
             embeddings_metadata=None,
-        ) #,
+        ),
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(os.path.join(opt.checkpoints_dir, opt.name), 'ckpt'),
+            save_weights_only=True,
+            monitor=monitor,
+            mode='min',
+            verbose=1,
+            save_best_only=True
+        )
         #visualCallBack(opt, model)
     ]
 

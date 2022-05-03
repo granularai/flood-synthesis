@@ -18,10 +18,12 @@ from data.base_dataset import BaseDataset, get_params, get_transform
 from PIL import Image
 
 class Mask2ImageFloodnetDataset(BaseDataset):
-    def __init__(self, opt):
+    def __init__(self, opt, train = True):
         super(Mask2ImageFloodnetDataset, self).__init__(opt)
-        data_path = '/mnt/now/houston/processed/train'
-
+        if train:
+            data_path = '/mnt/now/houston/processed/train'
+        else:
+            data_path = '/mnt/now/houston/processed/test'
         self.imgs = []
 
         x_dir = data_path+'/x/*'
@@ -112,7 +114,7 @@ class Mask2ImageFloodnetDataset(BaseDataset):
 
     @classmethod
     def getTfDataset(cls, opt):
-        ds = cls(opt)
+        ds = cls(opt, opt.is_train)
         #resizing = partial(layers.Resizing, height=512, width=512)
         #resize_x = resizing(interpolation='nearest')
         #resize_y = resizing(interpolation='bilinear')

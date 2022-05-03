@@ -35,6 +35,12 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--pool_size', type=int, default=50, help='the size of image buffer that stores previously generated images')
         parser.add_argument('--lr_policy', type=str, default='step', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=200, help='multiply by a gamma every lr_decay_iters iterations')
+        parser.add_argument('--lambda_', type=float, default = 1.0, help='GAN loss weight')
+        parser.add_argument('--eta_', type=float, default = 100.0, help='L1/Huber loss weight')
+        parser.add_argument('--delta_', type=float, default = 100.0, help='Content loss weight')
+        parser.add_argument('--gamma_', type=float, default = 100.0, help='Perceptual loss weight')        
+        
 
         self.isTrain = True
         return parser
+
